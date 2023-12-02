@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <style type="text/css">
+            .axis path,
+            .axis line {
+                fill: none;
+                stroke: black;            
+            } 
+            .axis text {
+                font-family: sans-serif;
+                font-size: 16px;
+            }
+        </style>
+    </head>
+    <body>
+<script type="module">
+            import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+var margin_plots= {top: 10, right: 10, bottom: 10, left: 10},
+size_plots = 1000 - margin_plots.left - margin_plots.right
+
+
+var svg = d3.select("body")
+            .append("svg")
+            .attr("width", size_plots  + margin_plots.left + margin_plots.right)
+            .attr("height", size_plots  + margin_plots.top + margin_plots.bottom)
+            .append("g")
+            .attr("transform", "translate(" + margin_plots.left + "," + margin_plots.top + ")");
+
+
+    d3.csv("penguins.csv").then((data) => {
+  // Clean data: remove rows with any missing values and convert numeric strings to numbers
+    let cleanData = data.filter(d => {
+        return d.bill_length_mm !== "" &&
+                d.bill_depth_mm !== "" &&
+                d.flipper_length_mm !== "" &&
+                d.body_mass_g !== "" &&
+                d.sex !== "";
+         }).map(d => {
+            return {
+                species: d.species,
+                island: d.island,
+                bill_length_mm: +d.bill_length_mm,
+                bill_depth_mm: +d.bill_depth_mm,
+                flipper_length_mm: +d.flipper_length_mm,
+                body_mass_g: +d.body_mass_g,
+                sex: d.sex
+            };
+    });
+
+  
+//   d3.select("body").selectAll("p")
+//     .data(cleanData)
+//     .enter()
+//     .append("p")
+//     .text((d) => {
+//       return `${d.species} ${d.island} ${d.bill_length_mm} ${d.bill_depth_mm} ${d.flipper_length_mm} ${d.body_mass_g} ${d.sex}`;
+//     });
+
+
+const variables = ['bill_length_mm', 'bill_depth_mm', 'flipper_length_mm', 'body_mass_g'];
+var num_plots = variables.length
+
+let mar = 20
+let size_each_plot = size_plots / num_plots
+
+var position = d3.scalePoint()
+                .domain(variables)
+                .range([0, size_plots-size_each_plot])
+
+var color = d3.scaleOrdinal()
+            .domain(["Adelie", "Chinstrap", "Gentoo" ])
+            .range([ "Blue", "Orange", "Green"])
+
+const shapes = {
+    'MALE': d3.symbol().type(d3.symbolCross).size(60), 
+    'FEMALE': d3.symbol().type(d3.symbolCircle).size(60)
+};
+
+function getSymbol(d) {
+  var symbolGenerator = shapes[d.sex];
+  if (symbolGenerator) {
+    // If the symbol generator exists for the given sex, return the path data
+    return symbolGenerator();
+  } else {
+    // If not, log an error or handle the case where the sex is not recognized
+    console.error("Sex not recognized:", d.sex);
+    return null; // Or return a default path data
+  }
+}
+
+
+
+for (let i in variables){
+    for (let j in variables){
+
+      var var1 = variables[i]
+      var var2 = variables[j]
+
+      if (var1 === var2) { continue; }
+
+      // Add X Scale of each graph
+      let xextent = d3.extent(cleanData, function(d) { return +d[var1] })
+      var x = d3.scaleLinear()
+                .domain(xextent).nice()
+                .range([ 0, size_each_plot-2*mar ]);
+
+      // Add Y Scale of each graph
+      let yextent = d3.extent(cleanData, function(d) { return +d[var2] })
+      var y = d3.scaleLinear()
+                .domain(yextent).nice()
+                .range([ size_each_plot-2*mar, 0 ]);
+
+      // Add a 'g' at the right position
+      var tmp = svg
+        .append('g')
+        .attr("transform", "translate(" + (position(var1)+mar) + "," + (position(var2)+mar) + ")");
+
+      // Add X and Y axis in tmp
+      tmp.append("g")
+        .attr("transform", "translate(" + 0 + "," + (size_each_plot-mar*2) + ")")
+        .call(d3.axisBottom(x).ticks(3));
+      tmp.append("g")
+        .call(d3.axisLeft(y).ticks(3));
+
+      // Add circle
+      tmp.selectAll("shapes")
+            .data(cleanData)
+            .enter()
+            .append("path")
+            .attr("d", getSymbol)
+            .attr("transform", function(d) { return "translate(" + x(+d[var1]) + "," + y(+d[var2]) + ")"; })
+            .attr("fill", function(d){ return color(d.species)});
+    }
+  }
+  for (let i in variables){
+    for (let j in variables){
+      
+      if (i != j) { continue; }
+      
+      var var1 = variables[i]
+      var var2 = variables[j]
+      svg.append('g')
+            .attr("transform", "translate(" + position(var1) + "," + position(var2) + ")")
+            .append('text')
+            .attr("x", size_each_plot/2)
+            .attr("y", size_each_plot/2)
+            .text(var1)
+            .attr("text-anchor", "middle")
+
+    }
+  }
+
+  const species = ["Adelie", "Chinstrap", "Gentoo"];
+
+// Append a group element for the color legend
+const colorLegend = svg.append("g")
+  .attr("class", "legend-color")
+  .attr("transform", "translate(20,20)"); // Adjust the position accordingly
+
+species.forEach((species, i) => {
+  const legendRow = colorLegend.append("g")
+    .attr("transform", `translate(0, ${i * 20})`); // Space out the legend entries
+
+  legendRow.append("rect")
+    .attr("width", 10)
+    .attr("height", 10)
+    .attr("fill", color(species)); // Use the color scale
+
+  legendRow.append("text")
+    .attr("x", 20) // Space the text 20 pixels from the rectangle
+    .attr("y", 10) // Align text in the middle of the rect
+    .attr("text-anchor", "start")
+    .style("text-transform", "capitalize")
+    .text(species);
+});
+
+// Shape Legend
+const sexes = ["MALE", "FEMALE"];
+const symbolTypes = [d3.symbolCross, d3.symbolCircle]; // The symbols used in your shapes object
+
+// Append a group element for the shape legend
+const shapeLegend = svg.append("g")
+  .attr("class", "legend-shape")
+  .attr("transform", "translate(150,20)"); // Adjust the position and spacing accordingly
+
+sexes.forEach((sex, i) => {
+  const legendRow = shapeLegend.append("g")
+    .attr("transform", `translate(0, ${i * 20})`); // Space out the legend entries
+
+  legendRow.append("path")
+    .attr("d", d3.symbol().type(symbolTypes[i]).size(60)) // Match the symbol in your shapes object
+    .attr("transform", "translate(0, 5)"); // Center the symbol vertically
+
+  legendRow.append("text")
+    .attr("x", 20) // Space the text 20 pixels from the symbol
+    .attr("y", 10) // Align text in the middle of the symbol
+    .attr("text-anchor", "start")
+    .text(sex);
+});
+
+
+
+
+
+
+
+});
+
+
+  
+
+</script>
+
+</body>
+</html>

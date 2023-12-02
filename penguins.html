@@ -1,0 +1,139 @@
+
+<!DOCTYPE html>
+<html lang="en">
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <style type="text/css">
+            .axis path,
+            .axis line {
+                fill: none;
+                stroke: black;            
+            } 
+            .axis text {
+                font-family: sans-serif;
+                font-size: 16px;
+            }
+        </style>
+    </head>
+    <body>
+<script type="module">
+            import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+    let h=600;
+    let w= 800;
+    let padding = 80;
+    let barPadding = 0.05;
+
+
+    let svg = d3.select("body")
+                    .append("svg")
+                    .attr("height", h)
+                    .attr("width", w)
+                    // .attr("class", "svg-hist")
+                    .style("margin-left", "auto")
+                    .style("margin-right", "auto")
+                    .style("display", "block") ;
+
+        svg.append("text")
+            .attr("x", w / 2)
+            .attr("y", padding / 2)
+            .attr("text-anchor", "middle")
+            .style("font-size", "18px")
+            .style("font-weight", "bold")
+            .text("Penguins Count at Each Island");
+
+    //stacked bar chart island and species frquencie"
+    d3.csv("penguins.csv").then((data)=>{
+        let groupedData = d3.group(data, d =>d.island, d=> d.species);
+        console.log(groupedData.entries())
+
+         // Restructure data for stacking
+         let stackedData = Array.from(groupedData, ([island, speciesData]) => {
+                let speciesCounts = {};
+                speciesData.forEach(species => {
+                    speciesCounts[species[0].species] = species.length;
+                });
+                return { island, ...speciesCounts };
+            });
+
+        console.log("stackedData: ", stackedData);
+
+    
+        let species = Array.from(new Set(data.map(d => d.species)));
+
+        let stackedSeries = d3.stack()
+            .keys(species)
+            .value((d, key) => d[key] || 0)(stackedData);
+
+
+        console.log("stackedSeries: ", stackedSeries);
+
+         let xScale = d3.scaleBand()
+                .domain(stackedData.map(d => d.island))
+                .range([padding, w - padding])
+                .paddingInner(barPadding);
+
+            let yScale = d3.scaleLinear()
+                .domain([0, d3.max(stackedData, d => d3.sum(Object.values(d)))]).nice()
+                .range([h - padding, padding]);
+
+            const customColors = ["blue", "yellow", "green"];
+            let colorScale = d3.scaleOrdinal()
+                .domain(species)
+                .range(customColors);
+
+            svg.selectAll("g")
+                .data(stackedSeries)
+                .join("g")
+                .attr("fill", d => colorScale(d.key))
+                .selectAll("rect")
+                .data(d => d)
+                .join("rect")
+                .attr("x", (d, i) => xScale(stackedData[i].island))
+                .attr("y", d => yScale(d[1]-d[0]))
+                .attr("height", d =>  { if((d[1] - d[0]) < d[0]) return h- padding - yScale(d[1]-d[0])
+                return  h- padding - yScale(d[1]-2*d[0])} )
+                .attr("width", xScale.bandwidth());
+
+            svg.append("g")
+                .attr("transform", `translate(0,${h - padding})`)
+                .call(d3.axisBottom(xScale))
+                .selectAll("text")
+                .style("font-size", "16px");;
+
+            svg.append("g")
+                .attr("transform", `translate(${padding},0)`)
+                .call(d3.axisLeft(yScale))
+                .selectAll("text")
+                .style("font-size", "16px");
+
+             // Colors legend
+            let legend = svg.append("g")
+                .attr("class", "legend")
+                .attr("transform", `translate(${w - 200},${padding})`);
+
+            species.forEach((s, i) => {
+                legend.append("rect")
+                    .attr("x", 0)
+                    .attr("y", i * 20)
+                    .attr("width", 15)
+                    .attr("height", 15)
+                    .attr("fill", colorScale(s));
+
+                legend.append("text")
+                    .attr("x", 20)
+                    .attr("y", i * 20 + 12)
+                    .text(s)
+                    .style("font-size", "12px");
+            });
+
+});
+
+
+  
+
+</script>
+
+</body>
+</html>
